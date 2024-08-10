@@ -26,8 +26,8 @@ hydra:
 # │            Model Configuration            │
 # └───────────────────────────────────────────┘
 
-processor_layers: 16              # Number of processor layers.
-hidden_dim: 512                   # Size of each layer.
+processor_layers: 8 #16              # Number of processor layers.
+hidden_dim: 256 #512                   # Size of each layer.
 mesh_level: 6                     # Max icosphere level in the multimesh.
 multimesh: true                   # If true, uses multimesh for the processor.
 processor_type: MessagePassing    # "GraphTransformer" as in GenCast, or "MessagePassing" as in GraphCast.
@@ -68,10 +68,10 @@ use_apex: true              # If true, uses Apex for fused Adam optimizer, typic
 # │           Dataset Configuration           │
 # └───────────────────────────────────────────┘
 
-dataset_path: /data/era5_75var             # Path to the dataset.
-static_dataset_path: static                # Path to the static datasets. Includes .nc files for land-sea mask and geopotential.
-dataset_metadata_path: /data/era5_75var/metadata/data.json  # Path to the dataset metadata, containing channel names.
-time_diff_std_path: /time_diff_std.npy  # Path to the .npy file with standard deviation of normalized per-variable per-pressure level time differences.
+dataset_path: /workspaces/data/era5_75var/           # Path to the dataset.
+static_dataset_path: /workspaces/data/static/                # Path to the static datasets. Includes .nc files for land-sea mask and geopotential.
+dataset_metadata_path: /workspaces/data/era5_75var/data.json  # Path to the dataset metadata, containing channel names.
+time_diff_std_path: /workspaces/AIWP_modulus/examples/weather/graphcast/time_diff_std_new.npy  # Path to the .npy file with standard deviation of normalized per-variable per-pressure level time differences.
 
 
 # ┌───────────────────────────────────────────┐
@@ -79,17 +79,17 @@ time_diff_std_path: /time_diff_std.npy  # Path to the .npy file with standard de
 # └───────────────────────────────────────────┘
 
 latlon_res: [721, 1440]     # Resolution of the latitude-longitude grid. If smaller than the native resolution, bilinear interpolation is applied.
-num_samples_per_year_train: 1408  # Number of samples per year for training.
-num_workers: 8              # Number of subprocesses to use for data loading. 0 means data is loaded in the main process.
-num_channels_climate: 73    # Number of climate channels.
+num_samples_per_year_train: 1408 #1408  # Number of samples per year for training.
+num_workers: 20              # Number of subprocesses to use for data loading. 0 means data is loaded in the main process.
+num_channels_climate: 4    # Number of climate channels.
 num_channels_static: 5      # Number of static channels (e.g., land-sea mask, geopotential, cosine of latitudes, sine and cosine of longitudes).
-num_channels_val: 3         # Number of channels used for light-weight validation during training.
+num_channels_val: 4         # Number of channels used for light-weight validation during training.
 num_val_steps: 8            # Number of rollouts used in light-weight validation during training.
 num_val_spy: 3              # Number of samples per year used as the initial condition in light-weight validation during training.
-num_history: 0              # Number of historical (previous time steps) to use. With history=1, the model uses t-1 and t to predict t+1.
+num_history: 1              # Number of historical (previous time steps) to use. With history=1, the model uses t-1 and t to predict t+1.
 use_cos_zenith: true        # If true, uses cosine zenith angle as additional channel(s). It can replace the total incident solar radiation.
 dt: 6.0                     # Time in hours between each timestep in the dataset. A dt of 6.0 means four timesteps per day.
-start_year: 1980            # Start year of the dataset, used in computing the cosine zenith angle.
+start_year: 2014            # Start year of the dataset, used in computing the cosine zenith angle.
 stride: 1                   # Number of steps between input and output variables. For example, if data is every 6 hours, stride 1 = 6 hour delta t, and stride 2 = 12 hours delta t.
 use_time_of_year_index: true  # If true, the dataloader also gives the index of the sample for calculating the time of day and year progress.
 
@@ -109,15 +109,15 @@ num_iters_step1: 1000       # Number of iterations (backward passes) in the firs
 num_iters_step2: 299000     # Number of iterations (backward passes) in the second phase of the learning rate schedule.
 num_iters_step3: 11000      # Number of iterations (backward passes) for incremental fine-tuning, with increments of "step_change_freq".
 step_change_freq: 1000      # Frequency of increments for multi-step fine-tuning.
-save_freq: 1              # Frequency (iterations) for saving network checkpoints.
-val_freq: 5               # Frequency (iterations) for performing light-weight validation during training.
+save_freq: 200              # Frequency (iterations) for saving network checkpoints.
+val_freq: 100               # Frequency (iterations) for performing light-weight validation during training.
 
 
 # ┌───────────────────────────────────────────┐
 # │          Logging and Monitoring           │
 # └───────────────────────────────────────────┘
 
-wb_mode: online            # Weights and Biases mode ["online", "offline", "disabled"]. If you don’t have a Weights and Biases API key, set this to "disabled".
+wb_mode: disabled            # Weights and Biases mode ["online", "offline", "disabled"]. If you don’t have a Weights and Biases API key, set this to "disabled".
 watch_model: false         # If true, records the model parameter gradients through Weights and Biases.
 
 

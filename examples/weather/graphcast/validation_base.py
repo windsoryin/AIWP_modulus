@@ -112,7 +112,7 @@ class Validation:
                 pred[t] = outpred
                 if self.num_history > 0:
                     # drop the first time step, and append the prediction as the last time step in invar
-                    invar = torch.cat((invar[:, 1:, :, :], outpred), dim=1)
+                    invar = torch.cat((invar[:, 1:, :, :], outpred.unsqueeze(1)), dim=1)
                 else:
                     invar = outpred
                 invar_cat = prepare_input(

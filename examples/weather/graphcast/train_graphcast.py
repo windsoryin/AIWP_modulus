@@ -103,7 +103,7 @@ class GraphCastTrainer(BaseTrainer):
 
         # instantiate the model
         self.model = GraphCastNet(
-            mesh_level=cfg.mesh_level,
+            # mesh_level=cfg.mesh_level,
             multimesh=cfg.multimesh,
             input_res=tuple(cfg.latlon_res),
             input_dim_grid_nodes=(
@@ -308,7 +308,7 @@ class GraphCastTrainer(BaseTrainer):
 @hydra.main(version_base="1.3", config_path="conf", config_name="config")
 def main(cfg: DictConfig) -> None:
 
-    # Optionally import apex
+    # Optionally import apex for (fused adam optimizer)
     if cfg.use_apex:
         try:
             import apex

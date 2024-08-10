@@ -14,10 +14,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
+# FROM nvcr.io/nvidia/modulus/modulus:24.07
+# RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+# RUN pip config set install.trusted-host https://pypi.tuna.tsinghua.edu.cn
+# RUN pip install --no-cache-dir mlflow
+##################################
+# modulus build args
+##################################
+
 ARG BASE_CONTAINER=nvcr.io/nvidia/pytorch:24.06-py3
 FROM ${BASE_CONTAINER} as builder
 
-ARG TARGETPLATFORM
+# ARG TARGETPLATFORM
 
 # use china image source
 RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
@@ -55,20 +64,21 @@ RUN if [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
 
 # install vtk and pyvista
 RUN if [ "$TARGETPLATFORM" = "linux/arm64" ] && [ -e "/modulus/deps/vtk-9.2.6.dev0-cp310-cp310-linux_aarch64.whl" ]; then \
-        echo "VTK wheel for $TARGETPLATFORM exists, installing!" && \
-        pip install --no-cache-dir /modulus/deps/vtk-9.2.6.dev0-cp310-cp310-linux_aarch64.whl; \
+    echo "VTK wheel for $TARGETPLATFORM exists, installing!" && \
+    pip install --no-cache-dir /modulus/deps/vtk-9.2.6.dev0-cp310-cp310-linux_aarch64.whl; \
     elif [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
-        echo "Installing vtk for: $TARGETPLATFORM" && \
-        pip install --no-cache-dir "vtk>=9.2.6"; \
+    echo "Installing vtk for: $TARGETPLATFORM" && \
+    pip install --no-cache-dir "vtk>=9.2.6"; \
     else \
-        echo "Installing vtk for: $TARGETPLATFORM from source" && \
-        apt-get update && apt-get install -y libgl1-mesa-dev && \
-        git clone https://gitlab.kitware.com/vtk/vtk.git && cd vtk && git checkout tags/v9.2.6 && git submodule update --init --recursive && \
-        mkdir build && cd build && cmake -GNinja -DVTK_WHEEL_BUILD=ON -DVTK_WRAP_PYTHON=ON /workspace/vtk/ && ninja && \
-        python setup.py bdist_wheel && \
-        pip install --no-cache-dir dist/vtk-9.2.6.dev0-cp310-cp310-linux_aarch64.whl && \
-        cd ../../ && rm -r vtk; \
+    echo "Installing vtk for: $TARGETPLATFORM from source"; \
+    # apt-get update && apt-get install -y libgl1-mesa-dev && \
+    # git clone https://gitlab.kitware.com/vtk/vtk.git && cd vtk && git checkout tags/v9.2.6 && git submodule update --init --recursive && \
+    # mkdir build && cd build && cmake -GNinja -DVTK_WHEEL_BUILD=ON -DVTK_WRAP_PYTHON=ON /workspace/vtk/ && ninja && \
+    # python setup.py bdist_wheel && \
+    # pip install --no-cache-dir dist/vtk-9.2.6.dev0-cp310-cp310-linux_aarch64.whl && \
+    # cd ../../ && rm -r vtk; \
     fi
+
 RUN pip install --no-cache-dir "pyvista>=0.40.1"
 
 # Install DGL, below instructions only work for containers with CUDA >= 12.1
@@ -180,6 +190,6 @@ RUN wget https://github.com/jgm/pandoc/releases/download/3.1.6.2/pandoc-3.1.6.2-
 
 
 
-############################################
+# ############################################
 #extra packages
 RUN pip install --no-cache-dir cdsapi h5netcdf

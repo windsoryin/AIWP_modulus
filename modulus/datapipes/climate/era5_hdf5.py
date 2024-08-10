@@ -206,6 +206,11 @@ class ERA5HDF5Datapipe(Datapipe):
         # Layout
         # Avoiding API change for self.num_history == 0.
         # Need to use FCHW layout in the future regardless of the num_history.
+        # - **F**: 表示批次（Batch size），即一次处理的样本数量。
+        # - **C**: 表示通道（Channels），例如图像的颜色通道（RGB 图像有 3 个通道）。
+        # - **H**: 表示高度（Height），即图像的垂直尺寸。
+        # - **W**: 表示宽度（Width），即图像的水平尺寸。
+
         if self.num_history == 0:
             self.layout = ["CHW", "FCHW"]
         else:

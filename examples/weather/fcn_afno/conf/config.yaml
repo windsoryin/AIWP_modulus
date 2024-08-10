@@ -20,9 +20,9 @@ hydra:
   run:
     dir: ./outputs/
 
-train_dir: /data/train
-validation_dir: /data/test
-stats_dir: /data/stats
+train_dir: examples/weather/data/era5_75var/train
+validation_dir: examples/weather/data/era5_75var/test
+stats_dir: examples/weather/data/era5_75var/stats
 
 ckpt_path: ./checkpoints
 
