@@ -64,7 +64,7 @@ class GraphCastTrainer(BaseTrainer):
     def __init__(self, cfg: DictConfig, dist, rank_zero_logger):
         super().__init__()
         self.dist = dist
-        self.dtype = torch.bfloat16 if cfg.full_bf16 else torch.float32
+        self.dtype = torch.bfloat16 if cfg.full_bf16 else torch.float32 # the trainning precision
         self.enable_scaler = False
         self.amp = cfg.amp
         self.amp_dtype = None
@@ -188,7 +188,8 @@ class GraphCastTrainer(BaseTrainer):
             "dt": cfg.dt,
             "start_year": cfg.start_year,
         }
-        self.channels_list = [i for i in range(cfg.num_channels_climate)]
+        self.channels_list = [i+40 for i in range(cfg.num_channels_climate)]
+        # self.channels_list=[236,237,238,239]
         self.datapipe = DataPipe(
             data_dir=to_absolute_path(os.path.join(cfg.dataset_path, "train")),
             stats_dir=to_absolute_path(os.path.join(cfg.dataset_path, "stats")),
@@ -271,6 +272,11 @@ class GraphCastTrainer(BaseTrainer):
             scaler=self.scaler,
             device=dist.device,
         )
+        # calculate model parameters
+        # 计算网络参数
+        total = sum([param.nelement() for param in self.model.parameters()])
+        # 精确地计算：1MB=1024KB=1048576字节
+        print('Number of parameter: % .4fM' % (total / 1e6))
 
         # Get the static data
         if self.static_dataset_path:
@@ -328,8 +334,8 @@ def main(cfg: DictConfig) -> None:
     DistributedManager.initialize()
     dist = DistributedManager()
 
-    # initialize loggers
-    if dist.rank == 0:
+    # initialize loggers at rank 0
+    if dist.rank == 0: 
         initialize_wandb(
             project="GraphCast",
             entity="Modulus",
@@ -483,7 +489,7 @@ def main(cfg: DictConfig) -> None:
                     del invar, invar_cat, outvar
                     torch.cuda.empty_cache()
                     error = trainer.validation.step(
-                        channels=list(np.arange(cfg.num_channels_val)), iter=iter
+                        channels=list(np.arange(cfg.num_channels_val)+40), iter=iter
                     )
                     logger.log(f"iteration {iter}, Validation MSE: {error:.04f}")
                     wandb.log(

@@ -246,12 +246,17 @@ class ERA5HDF5Datapipe(Datapipe):
             In channels specified or number of samples per year is not valid
         """
         # get all input data files
-        self.data_paths = sorted(self.data_dir.glob("????.h5"))
+        self.data_paths = sorted(self.data_dir.glob("*.h5")) # ????=yyyy,
         for data_path in self.data_paths:
             self.logger.info(f"ERA5 file found: {data_path}")
+        # add year and month list for data files
+        yearlist=[int(file_path.stem[:4]) for file_path in self.data_paths]
+        monthlist = [ 1 for i in range(len(yearlist))]
+        # monthlist=[int(file_path.stem[4:]) for file_path in self.data_paths]
+        self.datelist={'yearlist':yearlist,'monthlist':monthlist}
+        
         self.n_years = len(self.data_paths)
         self.logger.info(f"Number of years: {self.n_years}")
-
         # get total number of examples and image shape from the first file,
         # assuming other files have exactly the same format.
         self.logger.info(f"Getting file stats from {self.data_paths[0]}")
@@ -376,6 +381,7 @@ class ERA5HDF5Datapipe(Datapipe):
                 shuffle=self.shuffle,
                 process_rank=self.process_rank,
                 world_size=self.world_size,
+                datelist=self.datelist,
             )
             # Update length of dataset
             self.length = len(source) // self.batch_size
@@ -520,6 +526,7 @@ class ERA5DaliExternalSource:
         shuffle: bool = True,
         process_rank: int = 0,
         world_size: int = 1,
+        datelist: Dict = {},
     ):
         self.data_paths = list(data_paths)
         # Will be populated later once each worker starts running in its own process.
@@ -534,7 +541,7 @@ class ERA5DaliExternalSource:
         self.use_time_of_year_index = use_time_of_year_index
         self.batch_size = batch_size
         self.shuffle = shuffle
-
+        
         self.last_epoch = None
 
         self.indices = np.arange(num_samples)
@@ -550,6 +557,9 @@ class ERA5DaliExternalSource:
             self.dt: float = cos_zenith_args.get("dt")
             self.start_year: int = cos_zenith_args.get("start_year")
 
+        # add
+        self.datelist = datelist
+        
     def __call__(
         self, sample_info: dali.types.SampleInfo
     ) -> Tuple[Tensor, Tensor, np.ndarray]:
@@ -576,8 +586,10 @@ class ERA5DaliExternalSource:
 
         # Load sequence of timestamps
         if self.use_cos_zenith:
-            year = self.start_year + year_idx
-            start_time = datetime(year, 1, 1) + timedelta(hours=int(in_idx) * self.dt)
+            # year = self.start_year + year_idx
+            year = self.datelist['yearlist'][year_idx]
+            month = self.datelist['monthlist'][year_idx]
+            start_time = datetime(year, month, 1) + timedelta(hours=int(in_idx) * self.dt)
             timestamps = np.array(
                 [
                     (

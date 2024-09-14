@@ -174,3 +174,8 @@ multirun/
 
 # data
 *.npy
+
+# wandb log
+*.run
+*.wandb
+*wandb*.json

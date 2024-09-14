@@ -51,7 +51,7 @@ def main(cfg: DictConfig) -> None:
     zarr_paths = mirror.download(cfg.variables, date_range, hours)
 
     # Open the zarr files and construct the xarray from them
-    zarr_arrays = [xr.open_zarr(path) fo    r path in zarr_paths]
+    zarr_arrays = [xr.open_zarr(path) for path in zarr_paths]
     era5_xarray = xr.concat(
         [z[list(z.data_vars.keys())[0]] for z in zarr_arrays], dim="channel"
     )
