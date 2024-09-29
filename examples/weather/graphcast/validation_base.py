@@ -115,6 +115,8 @@ class Validation:
                     invar = torch.cat((invar[:, 1:, :, :], outpred.unsqueeze(1)), dim=1)
                 else:
                     invar = outpred
+                
+                time_idx=time_idx+1 # 0928 add: next time step
                 invar_cat = prepare_input(
                     invar=invar,
                     cos_zenith=cos_zenith,
@@ -140,14 +142,14 @@ class Validation:
                     fig.subplots_adjust(hspace=0.5, wspace=0.3)
 
                     for t in range(outvar.shape[0]):
-                        im_pred = ax[0, t].imshow(pred[t, c_i], vmin=-1.5, vmax=1.5)
+                        im_pred = ax[0, t].imshow(pred[t, chan], vmin=-1.5, vmax=1.5)
                         ax[0, t].set_title(f"Prediction (t={t+1})", fontsize=10)
                         fig.colorbar(
                             im_pred, ax=ax[0, t], orientation="horizontal", pad=0.4
                         )
 
                         im_outvar = ax[1, t].imshow(
-                            outvar[t, c_i], vmin=-1.5, vmax=1.5
+                            outvar[t, chan], vmin=-1.5, vmax=1.5
                         )
                         ax[1, t].set_title(f"Ground Truth (t={t+1})", fontsize=10)
                         fig.colorbar(
@@ -155,7 +157,7 @@ class Validation:
                         )
 
                         im_diff = ax[2, t].imshow(
-                            abs(pred[t, c_i] - outvar[t, c_i]), vmin=0.0, vmax=0.5
+                            abs(pred[t, chan] - outvar[t, chan]), vmin=0.0, vmax=0.5
                         )
                         ax[2, t].set_title(f"Abs. Diff. (t={t+1})", fontsize=10)
                         fig.colorbar(
@@ -165,9 +167,9 @@ class Validation:
                     fig.savefig(
                         os.path.join(
                             self.val_dir,
-                            f"era5_validation_channel{c_i}_iter{iter}.png",
+                            f"era5_validation_channel{chan}_iter{iter}.png",
                         )
                     )
-                    wandb.log({f"val_chan{c_i}_iter{iter}": fig}, step=iter)
+                    wandb.log({f"val_chan{chan}_iter{iter}": fig}, step=iter)
 
         return loss_epoch / len(self.val_datapipe)

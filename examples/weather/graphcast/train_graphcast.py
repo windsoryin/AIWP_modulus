@@ -83,7 +83,6 @@ class GraphCastTrainer(BaseTrainer):
                 raise ValueError(
                     "Full bfloat16 training is enabled, switch off amp in config"
                 )
-
         if cfg.amp:
             rank_zero_logger.info(f"Using config amp with dtype {cfg.amp_dtype}")
             if cfg.amp_dtype == "float16" or cfg.amp_dtype == "fp16":
@@ -128,7 +127,6 @@ class GraphCastTrainer(BaseTrainer):
             use_cugraphops_decoder=cfg.cugraphops_decoder,
             recompute_activation=cfg.recompute_activation,
         )
-
         # set gradient checkpointing
         if cfg.force_single_checkpoint:
             self.model.set_checkpoint_model(True)
@@ -188,7 +186,7 @@ class GraphCastTrainer(BaseTrainer):
             "dt": cfg.dt,
             "start_year": cfg.start_year,
         }
-        self.channels_list = [i+40 for i in range(cfg.num_channels_climate)]
+        self.channels_list = [i for i in range(cfg.num_channels_climate)]
         # self.channels_list=[236,237,238,239]
         self.datapipe = DataPipe(
             data_dir=to_absolute_path(os.path.join(cfg.dataset_path, "train")),
@@ -197,7 +195,7 @@ class GraphCastTrainer(BaseTrainer):
             latlon_resolution=cfg.latlon_res,
             interpolation_type=self.interpolation_type,
             num_samples_per_year=cfg.num_samples_per_year_train,
-            num_steps=1,
+            num_steps=2,
             num_history=cfg.num_history,
             use_cos_zenith=cfg.use_cos_zenith,
             use_time_of_year_index=cfg.use_time_of_year_index,
@@ -371,20 +369,24 @@ def main(cfg: DictConfig) -> None:
     rank_zero_logger.info("Training started...")
     loss_agg, iter, tagged_iter, num_rollout_steps = 0, trainer.iter_init + 1, 1, 1
     terminate_training, finetune, update_dataloader = False, False, False
-
+    split_file,update_dataloader_flag=True, False # 240926 add: load files in split size for performance optimization
+    split_iters=5000 # 240926 add: load files in split size for performance optimization
+    split_path=1
+    
     with torch.autograd.profiler.emit_nvtx() if cfg.profile else nullcontext():
         # training loop
         while True:
             assert (
                 iter < cfg.num_iters_step1 + cfg.num_iters_step2 + cfg.num_iters_step3
             ), "Training is already finished!"
-            for _, data in enumerate(trainer.datapipe):
-
+            for _, data in enumerate(trainer.datapipe):        
                 # profiling
-                if cfg.profile and iter == cfg.profile_range[0]:
+                import re
+                profile_range = re.findall(r'\d+', cfg.profile_range)
+                if cfg.profile and iter == profile_range[0]:
                     rank_zero_logger.info("Starting profile", "green")
                     profiler.start()
-                if cfg.profile and iter == cfg.profile_range[1]:
+                if cfg.profile and iter == profile_range[1]:
                     rank_zero_logger.info("Ending profile", "green")
                     profiler.stop()
                 torch.cuda.nvtx.range_push("Training iteration")
@@ -449,7 +451,43 @@ def main(cfg: DictConfig) -> None:
                         f"Switching to {num_rollout_steps}-step rollout!"
                     )
                     break
-
+                
+                # update_dataloader for performance optimization
+                if ( split_file 
+                    and iter%split_iters==0 
+                    and iter != tagged_iter ):
+                    update_dataloader_flag = True
+                    tagged_iter = iter
+                    
+                if update_dataloader_flag:
+                    rank_zero_logger.success(
+                        f"Switch training datapipe"
+                    )
+                    trainer.datapipe = DataPipe(
+                        data_dir=os.path.join(cfg.dataset_path, "train/",str(split_path)),
+                        stats_dir=os.path.join(cfg.dataset_path, "stats"),
+                        channels=trainer.channels_list,
+                        latlon_resolution=cfg.latlon_res,
+                        interpolation_type=trainer.interpolation_type,
+                        num_samples_per_year=cfg.num_samples_per_year_train,
+                        num_steps=1,
+                        num_history=cfg.num_history,
+                        use_cos_zenith=cfg.use_cos_zenith,
+                        use_time_of_year_index=cfg.use_time_of_year_index,
+                        cos_zenith_args=trainer.cos_zenith_args,
+                        batch_size=1,
+                        num_workers=cfg.num_workers,
+                        device=dist.device,
+                        process_rank=dist.rank,
+                        world_size=dist.world_size,
+                    )
+                    split_path=split_path+1 # increase the path num (trainning data year)
+                    rank_zero_logger.success(
+                        f"Switch To New training datapipe of size {len(trainer.datapipe)}"
+                    )
+                    update_dataloader_flag = False
+                    break
+                
                 # Prepare the input & output
                 invar = data[0]["invar"]
                 outvar = data[0]["outvar"]
@@ -461,35 +499,63 @@ def main(cfg: DictConfig) -> None:
                     time_idx = data[0]["time_of_year_idx"].item()
                 except KeyError:
                     time_idx = None
+                # invar_cat = prepare_input(
+                #         invar,
+                #         cos_zenith,
+                #         num_history=cfg.num_history,
+                #         static_data=trainer.static_data,
+                #         step=1,
+                #         time_idx=time_idx,
+                #         stride=cfg.stride,
+                #         dt=cfg.dt,
+                #         num_samples_per_year=cfg.num_samples_per_year_train,
+                #         device=dist.device,
+                #     )
+                # invar_cat, outvar = invar_cat.to(dtype=trainer.dtype), outvar.to(
+                #     dtype=trainer.dtype
+                # )
+                clear_flag=False
+                if trainer.validation and iter % cfg.val_freq == 0:
+                    # free up GPU memory
+                    clear_flag=True
+                    
+                prepare_input_vars = {
+                        "num_history": cfg.num_history,
+                        "static_data": trainer.static_data,
+                        "stride": cfg.stride,
+                        "dt": cfg.dt,
+                        "num_samples_per_year": cfg.num_samples_per_year_train,
+                        "device": dist.device,
+                    }
+                loss = trainer.autogress_train(invar, outvar,cos_zenith,time_idx,prepare_input_vars,clear_flag)
+                # if num_rollout_steps > 1:
+                #     # autogressively training step
+                #     prepare_input_vars = {
+                #         "num_history": cfg.num_history,
+                #         "static_data": trainer.static_data,
+                #         "stride": cfg.stride,
+                #         "dt": cfg.dt,
+                #         "num_samples_per_year": cfg.num_samples_per_year_train,
+                #         "device": dist.device,
+                #     }
+                #     loss = trainer.autogress_train(invar_cat, outvar,cos_zenith,time_idx,prepare_input_vars)
 
-                invar_cat = prepare_input(
-                    invar,
-                    cos_zenith,
-                    num_history=cfg.num_history,
-                    static_data=trainer.static_data,
-                    step=1,
-                    time_idx=time_idx,
-                    stride=cfg.stride,
-                    dt=cfg.dt,
-                    num_samples_per_year=cfg.num_samples_per_year_train,
-                    device=dist.device,
-                )
-                invar_cat, outvar = invar_cat.to(dtype=trainer.dtype), outvar.to(
-                    dtype=trainer.dtype
-                )
+                # else:
+                #     #single training step
+                #     loss = trainer.train(invar_cat, outvar)
+                #################################
+                
 
-                # training step
-                loss = trainer.train(invar_cat, outvar)
                 if dist.rank == 0:
                     loss_agg += loss.detach().cpu()
 
                 # validation
                 if trainer.validation and iter % cfg.val_freq == 0:
                     # free up GPU memory
-                    del invar, invar_cat, outvar
-                    torch.cuda.empty_cache()
+                    # del invar, invar_cat, outvar
+                    # torch.cuda.empty_cache()
                     error = trainer.validation.step(
-                        channels=list(np.arange(cfg.num_channels_val)+40), iter=iter
+                        channels=list(np.arange(cfg.num_channels_val)), iter=iter
                     )
                     logger.log(f"iteration {iter}, Validation MSE: {error:.04f}")
                     wandb.log(
@@ -503,6 +569,7 @@ def main(cfg: DictConfig) -> None:
                     torch.distributed.barrier()
 
                 # print logs and save checkpoint
+                # print(dist.rank)
                 if dist.rank == 0 and iter % cfg.save_freq == 0:
                     save_checkpoint(
                         to_absolute_path(cfg.ckpt_path),

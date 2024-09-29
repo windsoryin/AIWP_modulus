@@ -59,7 +59,7 @@ def prepare_input(
 
         for i in range(num_history + 1):
             # Calculate the adjusted time index
-            adjusted_time_idx = (time_idx - i) % num_samples_per_year
+            adjusted_time_idx = (time_idx + i) # time_idx is the time of the year
 
             # Compute hour of the year and its decomposition into day of year and time of day
             hour_of_year = adjusted_time_idx * stride * dt
