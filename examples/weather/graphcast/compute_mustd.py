@@ -3,15 +3,15 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 
-data_dir=Path('/workspaces/cma_data/test')
+data_dir=Path('/workspaces/cma_data/train')
 data_paths = sorted(data_dir.glob("??????.h5")) # ????=yyyy,
 data_files = [h5py.File(path, "r") for path in data_paths]
 mean_list = []
 std_list = []
 for idx in range(len(data_files)):
-    mean_data = np.zeros((1,240,1,1))
-    std_data = np.zeros((1,240,1,1))
-    for chans in range(24):
+    mean_data = np.zeros((1,10,1,1))
+    std_data = np.zeros((1,10,1,1))
+    for chans in range(1):
         data = data_files[idx]["fields"][:,chans*10:10*(chans+1),:,:]
         mean_data[:,chans*10:10*(chans+1),:,:] = np.mean(data, axis=(0, 2, 3)).reshape(1, -1, 1, 1)
         std_data[:,chans*10:10*(chans+1),:,:]=np.std(data, axis=(0, 2, 3)).reshape(1, -1, 1, 1)

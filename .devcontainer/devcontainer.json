@@ -41,9 +41,15 @@
 	"runArgs": [
 		"--name", "Modulus_V2_YWJ_container",
 		"--gpus", "all",
-		"--shm-size", "16g",
-		"-v", "/home/ailab/code/windsoryin/data:/workspaces/data"
+		//"--gpus", "device=0",
+		"--shm-size", "32g",
+		"-v", "/mnt/f/merge/2017:/workspaces/test_data",
+		"-v", "/mnt/e/data:/workspaces/data",
+		"-v", "/mnt/e/CRA_Prepared/DATA:/workspaces/cma_data",
+		// "-v", "/mnt/nas:/workspaces/cma_data"
 		// "-v", "${localWorkspaceFolder}:/code"
 	],
 
   }
+
+  

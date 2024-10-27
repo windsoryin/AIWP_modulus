@@ -15,6 +15,9 @@
 # limitations under the License.
 
 
+
+
+
 # FROM nvcr.io/nvidia/modulus/modulus:24.07
 # RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 # RUN pip config set install.trusted-host https://pypi.tuna.tsinghua.edu.cn
@@ -41,6 +44,10 @@ RUN apt-get update && \
     git lfs install
 
 ENV _CUDA_COMPAT_TIMEOUT=90
+
+ENV http_proxy http://192.168.12.18:7890
+ENV https_proxy http://192.168.12.18:7890
+
 
 # Install other dependencies
 RUN pip install --no-cache-dir "h5py>=3.7.0" "netcdf4>=1.6.3" "ruamel.yaml>=0.17.22" "scikit-learn>=1.0.2" "cftime>=1.6.2" "einops>=0.7.0" "pyspng>=0.1.0"
@@ -94,15 +101,17 @@ RUN if [ "$TARGETPLATFORM" = "linux/arm64" ] && [ -e "/modulus/deps/dgl-2.0.0-cp
     elif [ "$TARGETPLATFORM" = "linux/amd64" ]; then \
         echo "Installing DGL for: $TARGETPLATFORM" && \
         pip install --no-cache-dir --no-deps dgl==2.0.0 -f https://data.dgl.ai/wheels/cu121/repo.html; \
-    else \
-        echo "Installing DGL for: $TARGETPLATFORM from source" && \
-        git clone https://github.com/dmlc/dgl.git && cd dgl/ && git checkout tags/v2.0.0 && git submodule update --init --recursive && \
-        DGL_HOME="/workspace/dgl" bash script/build_dgl.sh -g && \
-        cd python && \
-        python setup.py install && \
-        python setup.py build_ext --inplace && \
-        cd ../../ && rm -r /workspace/dgl; \
+#     else \
+#         echo "Installing DGL for: $TARGETPLATFORM from source" && \
+#         # git clone https://github.com/dmlc/dgl.git && cd dgl/ && git checkout tags/v2.0.0 && git submodule update --init --recursive && \
+#         # DGL_HOME="/workspace/dgl" bash script/build_dgl.sh -g && \
+#         # cd python && \
+#         # python setup.py install && \
+#         # python setup.py build_ext --inplace && \
+#         # cd ../../ && rm -r /workspace/dgl; \
     fi
+
+# RUN pip install --no-cache-dir --no-deps dgl==2.0.0 -f https://data.dgl.ai/wheels/cu121/repo.html; 
 
 # Install custom onnx
 # TODO: Find a fix to eliminate the custom build
@@ -193,3 +202,12 @@ RUN wget https://github.com/jgm/pandoc/releases/download/3.1.6.2/pandoc-3.1.6.2-
 # ############################################
 #extra packages
 RUN pip install --no-cache-dir cdsapi h5netcdf
+
+
+ENV http_proxy ''
+ENV https_proxy ''
+
+# git config
+# COPY ~/.gitconfig /root/.gitconfig
+RUN git config --global user.name  “windsoryin” && \
+    git config --global user.email "1403538271@qq.com"

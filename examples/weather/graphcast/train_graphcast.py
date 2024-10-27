@@ -195,7 +195,7 @@ class GraphCastTrainer(BaseTrainer):
             latlon_resolution=cfg.latlon_res,
             interpolation_type=self.interpolation_type,
             num_samples_per_year=cfg.num_samples_per_year_train,
-            num_steps=2,
+            num_steps=1,
             num_history=cfg.num_history,
             use_cos_zenith=cfg.use_cos_zenith,
             use_time_of_year_index=cfg.use_time_of_year_index,
@@ -240,36 +240,57 @@ class GraphCastTrainer(BaseTrainer):
             self.optimizer = torch.optim.AdamW(
                 self.model.parameters(), lr=cfg.lr, betas=(0.9, 0.95), weight_decay=0.1
             )
-        scheduler1 = LinearLR(
-            self.optimizer,
-            start_factor=1e-3,
-            end_factor=1.0,
-            total_iters=cfg.num_iters_step1,
-        )
+        # scheduler1 = LinearLR(
+        #     self.optimizer,
+        #     start_factor=1e-3,
+        #     end_factor=1.0,
+        #     total_iters=cfg.num_iters_step1,
+        # )
         scheduler2 = CosineAnnealingLR(
             self.optimizer, T_max=cfg.num_iters_step2, eta_min=0.0
         )
-        scheduler3 = LambdaLR(
-            self.optimizer, lr_lambda=lambda epoch: (cfg.lr_step3 / cfg.lr)
-        )
-        self.scheduler = SequentialLR(
-            self.optimizer,
-            schedulers=[scheduler1, scheduler2, scheduler3],
-            milestones=[cfg.num_iters_step1, cfg.num_iters_step1 + cfg.num_iters_step2],
-        )
+        # scheduler3 = LambdaLR(
+        #     self.optimizer, lr_lambda=lambda epoch: (cfg.lr_step3 / cfg.lr)
+        # )
+        self.scheduler = scheduler2
+        # self.scheduler = SequentialLR(
+        #     self.optimizer,
+        #     schedulers=[scheduler1, scheduler2, scheduler3],
+        #     milestones=[cfg.num_iters_step1, cfg.num_iters_step1 + cfg.num_iters_step2],
+        #     last_epoch=999,
+        # )
         self.scaler = GradScaler(enabled=self.enable_scaler)
 
         # load checkpoint
-        if dist.world_size > 1:
-            torch.distributed.barrier()
-        self.iter_init = load_checkpoint(
-            to_absolute_path(cfg.ckpt_path),
-            models=self.model,
-            optimizer=self.optimizer,
-            scheduler=self.scheduler,
-            scaler=self.scaler,
-            device=dist.device,
-        )
+        # if dist.world_size > 1:
+        #     torch.distributed.barrier()
+        # self.iter_init = load_checkpoint(
+        #     to_absolute_path(cfg.ckpt_path),
+        #     models=self.model,
+            
+        #     device=dist.device,
+        # )
+        for i in range(230000):
+            self.scheduler.step()
+        self.scheduler.step()
+        print(self.scheduler.last_epoch)
+
+        print(self.scheduler.get_last_lr()[0])
+        if dist.rank==0:
+            for param_group in self.optimizer.param_groups:
+                print(f"Current learning rate: {param_group['lr']}")
+        self.scheduler.step()
+        if dist.rank==0:
+            for param_group in self.optimizer.param_groups:
+                print(f"Current learning rate: {param_group['lr']}")
+        # self.scheduler.last_epoch = 1
+        if dist.rank==0:
+            for param_group in self.optimizer.param_groups:
+                print(f"Current learning rate: {param_group['lr']}")
+        self.scheduler.step()
+        if dist.rank==0:
+            for param_group in self.optimizer.param_groups:
+                print(f"Current learning rate: {param_group['lr']}")
         # calculate model parameters
         # 计算网络参数
         total = sum([param.nelement() for param in self.model.parameters()])
@@ -370,8 +391,10 @@ def main(cfg: DictConfig) -> None:
     loss_agg, iter, tagged_iter, num_rollout_steps = 0, trainer.iter_init + 1, 1, 1
     terminate_training, finetune, update_dataloader = False, False, False
     split_file,update_dataloader_flag=True, False # 240926 add: load files in split size for performance optimization
-    split_iters=5000 # 240926 add: load files in split size for performance optimization
+    split_iters=50000 # 240926 add: load files in split size for performance optimization
     split_path=1
+    batch_size=32
+    batch_i=1
     
     with torch.autograd.profiler.emit_nvtx() if cfg.profile else nullcontext():
         # training loop
@@ -499,50 +522,51 @@ def main(cfg: DictConfig) -> None:
                     time_idx = data[0]["time_of_year_idx"].item()
                 except KeyError:
                     time_idx = None
-                # invar_cat = prepare_input(
-                #         invar,
-                #         cos_zenith,
-                #         num_history=cfg.num_history,
-                #         static_data=trainer.static_data,
-                #         step=1,
-                #         time_idx=time_idx,
-                #         stride=cfg.stride,
-                #         dt=cfg.dt,
-                #         num_samples_per_year=cfg.num_samples_per_year_train,
-                #         device=dist.device,
-                #     )
-                # invar_cat, outvar = invar_cat.to(dtype=trainer.dtype), outvar.to(
-                #     dtype=trainer.dtype
-                # )
+                
                 clear_flag=False
                 if trainer.validation and iter % cfg.val_freq == 0:
                     # free up GPU memory
                     clear_flag=True
                     
-                prepare_input_vars = {
-                        "num_history": cfg.num_history,
-                        "static_data": trainer.static_data,
-                        "stride": cfg.stride,
-                        "dt": cfg.dt,
-                        "num_samples_per_year": cfg.num_samples_per_year_train,
-                        "device": dist.device,
-                    }
-                loss = trainer.autogress_train(invar, outvar,cos_zenith,time_idx,prepare_input_vars,clear_flag)
-                # if num_rollout_steps > 1:
-                #     # autogressively training step
-                #     prepare_input_vars = {
-                #         "num_history": cfg.num_history,
-                #         "static_data": trainer.static_data,
-                #         "stride": cfg.stride,
-                #         "dt": cfg.dt,
-                #         "num_samples_per_year": cfg.num_samples_per_year_train,
-                #         "device": dist.device,
-                #     }
-                #     loss = trainer.autogress_train(invar_cat, outvar,cos_zenith,time_idx,prepare_input_vars)
 
-                # else:
-                #     #single training step
-                #     loss = trainer.train(invar_cat, outvar)
+                if num_rollout_steps > 1:
+                    # autogressively training step
+                    prepare_input_vars = {
+                            "num_history": cfg.num_history,
+                            "static_data": trainer.static_data,
+                            "stride": cfg.stride,
+                            "dt": cfg.dt,
+                            "num_samples_per_year": cfg.num_samples_per_year_train,
+                            "device": dist.device,
+                        }
+                    loss = trainer.autogress_train(invar, outvar,cos_zenith,time_idx,prepare_input_vars,clear_flag)
+
+                else:
+                    #single training step
+                    invar_cat = prepare_input(
+                        invar,
+                        cos_zenith,
+                        num_history=cfg.num_history,
+                        static_data=trainer.static_data,
+                        step=1,
+                        time_idx=time_idx,
+                        stride=cfg.stride,
+                        dt=cfg.dt,
+                        num_samples_per_year=cfg.num_samples_per_year_train,
+                        device=dist.device,
+                    )
+                    invar_cat, outvar = invar_cat.to(dtype=trainer.dtype), outvar.to(
+                        dtype=trainer.dtype
+                    )
+                    # loss=trainer.train(invar_cat,outvar)
+
+                    loss = trainer.forward(invar_cat, outvar)
+                    trainer.backward(loss/batch_size)
+                    
+                    if (iter+1)%batch_size==0:
+                        trainer.scheduler.step()
+                        trainer.optimizer.zero_grad()
+
                 #################################
                 
 
@@ -560,7 +584,7 @@ def main(cfg: DictConfig) -> None:
                     logger.log(f"iteration {iter}, Validation MSE: {error:.04f}")
                     wandb.log(
                         {
-                            "Validation MSE": error,
+                            "Validation MSE": error
                         },
                         step=iter,
                     )

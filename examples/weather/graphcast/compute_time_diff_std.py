@@ -34,6 +34,7 @@ def main(cfg: DictConfig) -> None:
     DistributedManager.initialize()
     dist = DistributedManager()
 
+    
     # instantiate the training datapipe
     DataPipe = ERA5HDF5Datapipe  # [T,num_channel, 721, 1440], grid features
     datapipe = DataPipe(

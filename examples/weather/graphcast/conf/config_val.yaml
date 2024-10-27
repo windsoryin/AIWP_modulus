@@ -26,14 +26,14 @@ hydra:
 # │            Model Configuration            │
 # └───────────────────────────────────────────┘
 
-processor_layers: 4              # Number of processor layers.
-hidden_dim: 128                   # Size of each layer.
+processor_layers: 8 #16              # Number of processor layers.
+hidden_dim: 128 #512                   # Size of each layer.
 mesh_level: 6                     # Max icosphere level in the multimesh.
 multimesh: true                   # If true, uses multimesh for the processor.
 processor_type: MessagePassing    # "GraphTransformer" as in GenCast, or "MessagePassing" as in GraphCast.
 khop_neighbors: 32                # Number of neighbors for each node used in the GraphTransformer. Only used if the processor type is "GraphTransformer".  
 num_attention_heads: 4            # Number of attention heads. Only used if the processor type is "GraphTransformer".
-norm_type: LayerNorm            # "TELayerNorm" or "LayerNorm". Use "TELayerNorm" for improved performance.
+norm_type: TELayerNorm            # "TELayerNorm" or "LayerNorm". Use "TELayerNorm" for improved performance.
 
 
 # ┌───────────────────────────────────────────┐
@@ -60,7 +60,7 @@ concat_trick: true          # If true, uses a concatenation trick to reduce memo
 cugraphops_encoder: false   # If true, uses cugraphops backend for the encoder.
 cugraphops_processor: false # If true, uses cugraphops backend for the processor.
 cugraphops_decoder: false   # If true, uses cugraphops backend for the decoder.
-recompute_activation: false  # If true, recomputes activation in backward to save memory. Currently, only SiLU is supported.
+recompute_activation: true  # If true, recomputes activation in backward to save memory. Currently, only SiLU is supported.
 use_apex: true              # If true, uses Apex for fused Adam optimizer, typically resulting in 10-20% faster training iterations.
                             # Apex is pre-installed in Modulus containers.
 
@@ -68,15 +68,15 @@ use_apex: true              # If true, uses Apex for fused Adam optimizer, typic
 # │           Dataset Configuration           │
 # └───────────────────────────────────────────┘
 
-dataset_path: /workspaces/data/era5_75var/           # Path to the dataset.
-static_dataset_path: /workspaces/data/static/                # Path to the static datasets. Includes .nc files for land-sea mask and geopotential.
-dataset_metadata_path: /workspaces/data/era5_75var/data.json  # Path to the dataset metadata, containing channel names.
-time_diff_std_path: /workspaces/AIWP_modulus/examples/weather/graphcast/old_static/time_diff_std_new.npy  # Path to the .npy file with standard deviation of normalized per-variable per-pressure level time differences.
+# dataset_path: /workspaces/data/era5_75var/           # Path to the dataset.
+# static_dataset_path: /workspaces/data/static/                # Path to the static datasets. Includes .nc files for land-sea mask and geopotential.
+# dataset_metadata_path: /workspaces/data/era5_75var/data.json  # Path to the dataset metadata, containing channel names.
+# time_diff_std_path: /workspaces/AIWP_modulus/examples/weather/graphcast/old_static/time_diff_std_new.npy  # Path to the .npy file with standard deviation of normalized per-variable per-pressure level time differences.
 
-# dataset_path: /workspaces/cma_data/          # Path to the dataset.
-# static_dataset_path: /workspaces/cma_data/static/                # Path to the static datasets. Includes .nc files for land-sea mask and geopotential.
-# dataset_metadata_path: /workspaces/cma_data/cma_data.json  # Path to the dataset metadata, containing channel names.
-# time_diff_std_path: /workspaces/AIWP_modulus/examples/weather/graphcast/time_diff_std_new.npy  # Path to the .npy file with standard deviation of normalized per-variable per-pressure level time differences.
+dataset_path: /workspaces/cma_data/          # Path to the dataset.
+static_dataset_path: /workspaces/cma_data/static/                # Path to the static datasets. Includes .nc files for land-sea mask and geopotential.
+dataset_metadata_path: /workspaces/cma_data/cma_data.json  # Path to the dataset metadata, containing channel names.
+time_diff_std_path: /workspaces/AIWP_modulus/examples/weather/graphcast/model_large_135/time_diff_std_new.npy  # Path to the .npy file with standard deviation of normalized per-variable per-pressure level time differences.
 
 
 # ┌───────────────────────────────────────────┐
@@ -90,7 +90,7 @@ num_channels_climate: 2   # Number of climate channels.
 num_channels_static: 5      # Number of static channels (e.g., land-sea mask, geopotential, cosine of latitudes, sine and cosine of longitudes).
 num_channels_val: 2         # Number of channels used for light-weight validation during training.
 num_val_steps: 8            # Number of rollouts used in light-weight validation during training.
-num_val_spy: 3              # Number of samples per year used as the initial condition in light-weight validation during training.
+num_val_spy: 30              # Number of samples per year used as the initial condition in light-weight validation during training.
 num_history: 1              # Number of historical (previous time steps) to use. With history=1, the model uses t-1 and t to predict t+1.
 use_cos_zenith: true        # If true, uses cosine zenith angle as additional channel(s). It can replace the total incident solar radiation.
 dt: 6.0                     # Time in hours between each timestep in the dataset. A dt of 6.0 means four timesteps per day.
@@ -110,11 +110,11 @@ amp_dtype: bfloat16         # Data type to use with AMP if "amp" is true.
 full_bf16: true             # If true, uses bfloat16 for the entire training.
 lr: 1e-3                    # Max learning rate in the learning rate schedule. Starts from zero to "lr" within "num_iters_step1" steps, then decays with a cosine schedule in "num_iters_step2" steps, reaching "lr_step3".
 lr_step3: 3e-7              # Min learning rate in the learning rate schedule.
-num_iters_step1: 1000       # Number of iterations (backward passes) in the first phase of the learning rate schedule.
-num_iters_step2: 299000     # Number of iterations (backward passes) in the second phase of the learning rate schedule.
+num_iters_step1: 100       # Number of iterations (backward passes) in the first phase of the learning rate schedule.
+num_iters_step2: 200 #299000     # Number of iterations (backward passes) in the second phase of the learning rate schedule.
 num_iters_step3: 11000      # Number of iterations (backward passes) for incremental fine-tuning, with increments of "step_change_freq".
-step_change_freq: 1000      # Frequency of increments for multi-step fine-tuning.
-save_freq: 100              # Frequency (iterations) for saving network checkpoints.
+step_change_freq: 100      # Frequency of increments for multi-step fine-tuning.
+save_freq: 50              # Frequency (iterations) for saving network checkpoints.
 val_freq: 200               # Frequency (iterations) for performing light-weight validation during training.
 
 
@@ -131,7 +131,7 @@ watch_model: false         # If true, records the model parameter gradients thro
 # └───────────────────────────────────────────┘
 
 ckpt_path: checkpoints      # Directory for saving model checkpoints.
-val_dir: validation         # Directory for saving light-weight validation plots.
+val_dir: Myvalidation         # Directory for saving light-weight validation plots.
 ckpt_name: model            # Name of the checkpoints.
 
 
@@ -141,5 +141,5 @@ ckpt_name: model            # Name of the checkpoints.
 
 synthetic_dataset: false    # If true, uses a synthetic dataset for debugging and performance benchmarking.
 pyt_profiler: false         # If true, uses PyTorch profiler.
-profile: false              # If true, uses NVIDIA Nsight systems for profiling.
+profile: true              # If true, uses NVIDIA Nsight systems for profiling.
 profile_range: (90,110)    # Range of iterations for profiling.
